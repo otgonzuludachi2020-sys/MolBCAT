@@ -1,0 +1,10 @@
+torch
+torch-geometric
+rdkit
+scikit-learn
+pandas
+numpy
+matplotlib
+scipy
+datasets
+retrying
