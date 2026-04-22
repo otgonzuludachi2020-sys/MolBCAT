@@ -12,6 +12,13 @@ MolBCAT is a lightweight multimodal molecular property prediction framework that
  - A Graph Isomorphism Network (GIN) for molecular graphs
  - Bidirectional cross-modal attention for dynamic modality interaction
  - A gated fusion mechanism for adaptive representation learning
+<p align="center">
+  <img src="molbcat_architecture.png" width="700"/>
+</p>
+
+<p align="center">
+  <em>Figure: Overview of the MolBCAT framework.</em>
+</p>
 
 Despite using only 250K pretraining molecules and ~4.2M parameters, MolBCAT achieves competitive performance on multiple MoleculeNet benchmarks.
 
