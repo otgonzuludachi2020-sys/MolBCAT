@@ -1,0 +1,29 @@
+# Core
+# Install torch-scatter and torch-sparse with matching CUDA version:
+#   pip install torch-scatter -f https://data.pyg.org/whl/torch-2.10.0+cu128.html
+#   pip install torch-sparse  -f https://data.pyg.org/whl/torch-2.10.0+cu128.html
+#   pip install torch-geometric
+torch==2.10.0
+torch-geometric
+torch-scatter
+torch-sparse
+
+# Chemistry
+rdkit==2026.3.1
+datasets
+
+# ML utilities
+scikit-learn==1.8.0
+scipy==1.17.1
+numpy==1.26.4
+pandas==3.0.2
+
+# Config
+pyyaml
+
+# Visualization
+matplotlib==3.10.8
+
+# Misc
+retrying
+tqdm

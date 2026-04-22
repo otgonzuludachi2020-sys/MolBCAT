@@ -1,0 +1,107 @@
+# Classification experiment configuration
+
+data:
+  datasets:
+    - name: BBBP
+      hf: scikit-fingerprints/MoleculeNet_BBBP
+      col: label
+    - name: HIV
+      hf: scikit-fingerprints/MoleculeNet_HIV
+      col: label
+    - name: ClinTox
+      hf: scikit-fingerprints/MoleculeNet_ClinTox
+      col: CT_TOX
+    - name: Tox21_NR_AR
+      hf: scikit-fingerprints/MoleculeNet_Tox21
+      col: NR-AR
+
+split:
+  test_ratio: 0.20
+  val_ratio: 0.10
+  phase1_seed: 42
+  phase2_seeds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+model:
+  emb_dim: 256
+  hidden_dim: 512
+  gin_hidden_dim: 128
+  node_feat_dim: 9
+  max_len: 120
+  nhead: 4
+
+training:
+  batch_size: 32
+  early_stop: 8
+  epochs: 20           # GRU / GIN epochs
+  molbcat_epochs: 30   # MolBCAT cross-attention epochs
+
+# Data efficiency uses different early_stop and epochs
+data_efficiency:
+  early_stop: 5
+  epochs: 30
+
+# Hyperparameter search grids
+grids:
+  gru_random:
+    - hidden: 256
+      lr: 1.0e-3
+    - hidden: 256
+      lr: 1.0e-4
+    - hidden: 512
+      lr: 1.0e-3
+    - hidden: 512
+      lr: 1.0e-4
+
+  gru_frozen:
+    - lr: 1.0e-3
+    - lr: 5.0e-4
+
+  gru_finetune:
+    - lr: 1.0e-4
+    - lr: 5.0e-5
+
+  gin:
+    - lr: 1.0e-3
+    - lr: 5.0e-4
+
+  molbcat:
+    - lr_encoder: 1.0e-5
+      lr_head: 1.0e-3
+    - lr_encoder: 1.0e-5
+      lr_head: 5.0e-4
+    - lr_encoder: 5.0e-6
+      lr_head: 1.0e-3
+
+# Models to run
+models:
+  - name: GRU_Random
+    pretrained: false
+    freeze_encoder: false
+    grid: gru_random
+
+  - name: GRU_Frozen
+    pretrained: true
+    freeze_encoder: true
+    grid: gru_frozen
+
+  - name: GRU_Finetune
+    pretrained: true
+    freeze_encoder: false
+    grid: gru_finetune
+
+  - name: GIN
+    grid: gin
+
+  - name: MolBCAT
+    pretrained: true
+    grid: molbcat
+
+weights:
+  pretrained_encoder: weights/pretrained_encoder_epoch10.pt
+  vocab: weights/vocab.json
+  save_dir:
+    gru_gin: weights/GRU_GIN
+    molbcat: weights/MolBCAT
+
+output:
+  save_dir: ./outputs/classification

@@ -1,0 +1,33 @@
+# Weights — download from Google Drive (see README)
+weights/
+
+# Outputs and checkpoints
+outputs/
+checkpoints/
+data/cache/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Environment
+.env
+.venv/
+env/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
