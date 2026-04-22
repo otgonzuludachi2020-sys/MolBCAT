@@ -7,11 +7,13 @@ Official implementation of the paper:
 
 ## Overview
 
-MolBCAT is a multimodal molecular property prediction framework that integrates:
-- A *self-supervised pretrained GRU encoder** for SMILES sequences
-- A **Graph Isomorphism Network (GIN)** for molecular graphs
-- **Bidirectional cross-modal attention** for dynamic modality interaction
-- A **gated fusion mechanism** for adaptive representation combining
+MolBCAT is a lightweight multimodal molecular property prediction framework that integrates:
+ - A self-supervised pretrained GRU encoder for SMILES sequences
+ - A Graph Isomorphism Network (GIN) for molecular graphs
+ - Bidirectional cross-modal attention for dynamic modality interaction
+ - A gated fusion mechanism for adaptive representation learning
+
+Despite using only 250K pretraining molecules and ~4.2M parameters, MolBCAT achieves competitive performance on multiple MoleculeNet benchmarks.
 
 ## Repository Structure
 
