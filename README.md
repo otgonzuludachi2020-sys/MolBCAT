@@ -13,11 +13,11 @@ MolBCAT is a lightweight multimodal molecular property prediction framework that
  - Bidirectional cross-modal attention for dynamic modality interaction
  - A gated fusion mechanism for adaptive representation learning
 <p align="center">
-  <img src="molbcat_architecture.png" width="900"/>
+  <img src="molbcat_architecture.png" width="90%"/>
 </p>
 
 <p align="center">
-  <em>Figure: Overview of the MolBCAT framework.</em>
+  <em>Figure 1.Overview of the MolBCAT framework.</em>
 </p>
 
 Despite using only 250K pretraining molecules and ~4.2M parameters, MolBCAT achieves competitive performance on multiple MoleculeNet benchmarks.
