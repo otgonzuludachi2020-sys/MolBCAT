@@ -1,7 +1,7 @@
 """
 Concatenation ablation study.
 Compares MolBCAT (cross-modal attention) vs MolBCAT_Concat
-(simple concatenation fusion) on BBBP, ClinTox, and Lipophilicity.
+(simple concatenation fusion) on BBBP, ClinTox, HIV, Tox21_NR_AR, ESOL, and Lipophilicity.
 
 Usage:
     python scripts/train_ablation.py --cls_config configs/classification.yaml \
@@ -62,14 +62,10 @@ class MolBCAT_Concat(nn.Module):
         self.gin_proj    = nn.Linear(gin_hidden, hidden_dim)
         self.seq_gate    = nn.Linear(hidden_dim * 2, hidden_dim)
 
-        # LayerNorm to equalise scale before concat (fairness)
         self.norm_gru    = nn.LayerNorm(hidden_dim)
         self.norm_gin    = nn.LayerNorm(hidden_dim)
-
-        # Project concat(H, H) → H so output dim == MolBCAT
         self.proj        = nn.Linear(hidden_dim * 2, hidden_dim)
 
-        # Same head architecture as MolBCAT
         self.head = nn.Sequential(
             nn.Dropout(dropout), nn.Linear(hidden_dim, 256),
             nn.ReLU(), nn.Dropout(dropout), nn.Linear(256, 1),
@@ -78,7 +74,6 @@ class MolBCAT_Concat(nn.Module):
     def forward(self, smiles_x: torch.Tensor, graph_data) -> torch.Tensor:
         from torch_geometric.nn import global_mean_pool
 
-        # Sequence branch
         gru_out = self.gru_encoder(smiles_x)
         h_cls   = gru_out[:, 0, :]
         mask    = (smiles_x != self.pad_id).float()
@@ -88,11 +83,9 @@ class MolBCAT_Concat(nn.Module):
         )
         h_gru = torch.sigmoid(self.seq_gate(torch.cat([h_cls, h_mean], dim=1)))
 
-        # Graph branch
         atom_emb, bvec = self.gin_encoder(graph_data)
         h_gin = self.gin_proj(global_mean_pool(atom_emb, bvec))
 
-        # Normalize + concat + project (no cross-attention)
         h_gru = self.norm_gru(h_gru)
         h_gin = self.norm_gin(h_gin)
         return self.head(self.proj(torch.cat([h_gru, h_gin], dim=1)))
@@ -101,11 +94,6 @@ class MolBCAT_Concat(nn.Module):
 def _train_concat(model, train_loader, val_loader,
                    pos_weight, lr_encoder, lr_head,
                    epochs, early_stop, task, device) -> tuple:
-    """
-    Train MolBCAT_Concat with same schedule as MolBCAT:
-    - Separate LR for encoder vs head
-    - Freeze GRU encoder for first 3 epochs
-    """
     encoder_params = (
         list(model.gru_encoder.parameters()) +
         list(model.gin_encoder.parameters()) +
@@ -131,6 +119,7 @@ def _train_concat(model, train_loader, val_loader,
     patience    = 0
 
     for epoch in range(epochs):
+        # Freeze GRU encoder for first 3 epochs (same as MolBCAT)
         req_grad = epoch >= 3
         for p in model.gru_encoder.parameters():
             p.requires_grad = req_grad
@@ -151,7 +140,7 @@ def _train_concat(model, train_loader, val_loader,
                 out = model(smiles_x.to(device), graph_data.to(device)).view(-1)
                 preds.extend((torch.sigmoid(out) if task == 'cls'
                                else out).cpu().numpy())
-                trues.extend(labs.numpy())
+                trues.extend(labs.cpu().numpy())
 
         if task == 'cls':
             metric   = safe_auc(trues, preds)
@@ -159,7 +148,7 @@ def _train_concat(model, train_loader, val_loader,
                 continue
             improved = metric > best_metric + 1e-4
         else:
-            metric = calc_reg_metrics(trues, preds)['RMSE']
+            metric   = calc_reg_metrics(trues, preds)['RMSE']
             improved = metric < best_metric - 1e-4
 
         if improved:
@@ -179,7 +168,6 @@ def _train_concat(model, train_loader, val_loader,
 def run_ablation(dataset_cfg: dict, cfg: dict,
                  vocab: dict, device: str,
                  task: str, out_dir: str) -> dict:
-    """Run Phase 1 + Phase 2 for MolBCAT_Concat on one dataset."""
     name = dataset_cfg['name']
     print(f"\n{'='*55}\nABLATION — {name}\n{'='*55}")
 
@@ -192,10 +180,9 @@ def run_ablation(dataset_cfg: dict, cfg: dict,
     ds = load_dataset(dataset_cfg['hf'])['train']
     smiles, labels = filter_valid(ds['SMILES'], ds[dataset_cfg['col']], task=task)
     vocab_size     = len(vocab)
+    grid           = cfg['grids']['molbcat']
 
-    grid = cfg['grids']['molbcat']
-
-    # Phase 1 — HP tuning
+    # Phase 1
     if 'lr_encoder' not in best_hps:
         print("  Phase 1: HP tuning...")
         set_seed(cfg['split']['phase1_seed'])
@@ -249,7 +236,7 @@ def run_ablation(dataset_cfg: dict, cfg: dict,
         save_json(p1_path, best_hps)
         print(f"  Best HPs: {best_hps}")
 
-    # Phase 2 — Multi-seed evaluation
+    # Phase 2
     seeds     = cfg['split']['phase2_seeds']
     remaining = [s for s in seeds if str(s) not in p2]
     print(f"  Phase 2: remaining seeds = {remaining}")
@@ -277,6 +264,10 @@ def run_ablation(dataset_cfg: dict, cfg: dict,
             train_ds   = CrossAttnDataset(X_tr,   y_tr,   vocab, cfg['model']['max_len'])
             val_ds     = CrossAttnDataset(X_val,  y_val,  vocab, cfg['model']['max_len'])
             test_ds    = CrossAttnDataset(X_test, y_test, vocab, cfg['model']['max_len'])
+
+            if len(train_ds) == 0 or len(val_ds) == 0 or len(test_ds) == 0:
+                print(f"  Seed {seed}: empty split, skipping.")
+                continue
 
             try:
                 tl      = DataLoader(train_ds, batch_size=cfg['training']['batch_size'],
@@ -342,8 +333,8 @@ def main(args=None):
     os.makedirs(args.out_dir, exist_ok=True)
     all_results = []
 
-    # Classification: BBBP, ClinTox
-    for ds_name in ['BBBP', 'ClinTox']:
+    # Classification: BBBP, ClinTox, HIV, Tox21_NR_AR
+    for ds_name in ['BBBP', 'ClinTox', 'HIV', 'Tox21_NR_AR']:
         ds_cfg = next((d for d in cls_cfg['data']['datasets']
                        if d['name'] == ds_name), None)
         if ds_cfg is None:
@@ -356,24 +347,24 @@ def main(args=None):
         except Exception as e:
             print(f"ERROR on {ds_name}: {e}")
 
-    # Regression: Lipophilicity
-    lipo_cfg = next((d for d in reg_cfg['data']['datasets']
-                     if d['name'] == 'Lipophilicity'), None)
-    if lipo_cfg:
-        try:
-            p2     = run_ablation(lipo_cfg, reg_cfg, vocab, device,
-                                   task='reg', out_dir=args.out_dir)
-            result = summarize(p2, 'Lipophilicity',
-                                reg_cfg['split']['phase2_seeds'], 'reg')
-            all_results.append(result)
-        except Exception as e:
-            print(f"ERROR on Lipophilicity: {e}")
+    # Regression: Lipophilicity, ESOL
+    for reg_name in ['Lipophilicity', 'ESOL']:
+        reg_ds_cfg = next((d for d in reg_cfg['data']['datasets']
+                           if d['name'] == reg_name), None)
+        if reg_ds_cfg:
+            try:
+                p2     = run_ablation(reg_ds_cfg, reg_cfg, vocab, device,
+                                       task='reg', out_dir=args.out_dir)
+                result = summarize(p2, reg_name,
+                                    reg_cfg['split']['phase2_seeds'], 'reg')
+                all_results.append(result)
+            except Exception as e:
+                print(f"ERROR on {reg_name}: {e}")
 
     if not all_results:
         print("No results to summarize.")
         return
 
-    # Print and save
     print(f"\n{'='*60}\nABLATION SUMMARY — MolBCAT_Concat\n{'='*60}")
     df = pd.DataFrame(all_results)
     print(df.to_string(index=False))
