@@ -12,6 +12,9 @@ torch-sparse
 rdkit==2026.3.1
 datasets
 
+# Hugging Face
+transformers
+
 # ML utilities
 scikit-learn==1.8.0
 scipy==1.17.1
