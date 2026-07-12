@@ -37,6 +37,7 @@ molbcat/
 │   ├── models/
 │   │   ├── gru.py             # GRU encoder and model
 │   │   ├── gin.py             # GIN encoder and model
+│   │   ├── chemberta.py       # ChemBERTa model
 │   │   └── molbcat.py         # Full MolBCAT model
 │   ├── dataset/
 │   │   ├── smiles.py          # SMILES encoding and dataset
@@ -72,6 +73,7 @@ pip install -r requirements.txt
 Download weights from Google Drive and place them in the `weights/` folder:
 
 ```
+```
 weights/
 ├── vocab.json
 ├── pretrained_encoder_epoch10.pt
@@ -82,8 +84,15 @@ weights/
 │   └── GIN.pt
 ├── MolBCAT/{dataset}/seed{1..10}/
 │   └── MolBCAT.pt
+├── ChemBERTa/{dataset}/seed{1..10}/
+│   └── ChemBERTa.pt
 └── Regression/{dataset}/seed{1..10}/
-    ├── GRU_Random.pt  GRU_Frozen.pt  GRU_Finetune.pt  GIN.pt  MolBCAT_Reg.pt
+    ├── GRU_Random.pt
+    ├── GRU_Frozen.pt
+    ├── GRU_Finetune.pt
+    ├── GIN.pt
+    ├── ChemBERTa.pt
+    └── MolBCAT_Reg.pt
 ```
 
 Download pretrained weights from the link below:
@@ -135,6 +144,9 @@ python main.py predict --dataset BBBP --smiles "CC(=O)Oc1ccccc1C(=O)O"
 
 # From CSV file
 python main.py predict --dataset ESOL --input molecules.csv --output results.csv --model MolBCAT --seed 1
+
+# Single SMILES (ChemBERTa)
+python main.py predict --dataset BBBP --model ChemBERTa --smiles "CC(=O)Oc1ccccc1C(=O)O"
 ```
 
 ## Datasets
