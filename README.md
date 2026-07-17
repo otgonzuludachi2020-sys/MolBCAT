@@ -1,11 +1,11 @@
-# MolBCAT: Self-Supervised GRU Pretraining with Bidirectional Cross-Modal Attention for Molecular Property Prediction
+# Molecular Bidirectional Cross-Modal Attention (MolBCAT): Self-supervised multimodal learning with gated recurrent unit pretraining for molecular property prediction 
 
-Official implementation of the paper:
+Official implementation of the proposed MolBCAT framework:
 
-> **MolBCAT: Self-supervised GRU pretraining with bidirectional cross-modal attention for molecular property prediction**
+> **Molecular Bidirectional Cross-Modal Attention (MolBCAT): Self-supervised multimodal learning with gated recurrent unit pretraining for molecular property prediction**
 > Otgonzul Zorigt, Soualihou Ngnamsie Njimbouom, Candra Zonyfar, Jeong-Dong Kim
 
-## Overview
+## Description 
 
 MolBCAT is a lightweight multimodal molecular property prediction framework that integrates:
  - A self-supervised pretrained GRU encoder for SMILES sequences
@@ -17,12 +17,12 @@ MolBCAT is a lightweight multimodal molecular property prediction framework that
 </p>
 
 <p align="center">
-  <em>Figure 1.Overview of the MolBCAT framework.</em>
+  <em>Figure 1. Overview of the MolBCAT framework.</em>
 </p>
 
 Despite using only 250K pretraining molecules and ~4.2M parameters, MolBCAT achieves competitive performance on multiple MoleculeNet benchmarks.
 
-## Repository Structure
+## Code Information 
 
 ```
 molbcat/
@@ -149,9 +149,9 @@ python main.py predict --dataset ESOL --input molecules.csv --output results.csv
 python main.py predict --dataset BBBP --model ChemBERTa --smiles "CC(=O)Oc1ccccc1C(=O)O"
 ```
 
-## Datasets
+## Datasets 
 
-All datasets are loaded automatically from HuggingFace. See [`data/README.md`](data/README.md) for details.
+All benchmark datasets are loaded automatically from Hugging Face and originate from the MoleculeNet benchmark. See [`data/README.md`](data/README.md) for details.
 
 | Dataset       | Task           | Metric  |
 |---------------|----------------|---------|
@@ -173,6 +173,17 @@ All datasets are loaded automatically from HuggingFace. See [`data/README.md`](d
 
 We apply scaffold-based train/test separation using Murcko scaffolds to ensure that structurally distinct molecules are held out for evaluation. For validation, a stratified random split is applied on the training set to mitigate class imbalance and ensure stable evaluation during hyperparameter tuning.
 
+## Citation
+
+If you use MolBCAT in your research, please cite the Zenodo software record:
+
+Zorigt, O., Njimbouom, S. N., Zonyfar, C., Park, I., & Kim, J.-D.
+MolBCAT.
+Zenodo.
+https://doi.org/10.5281/zenodo.21320152
+
 ## License
 
 This project is licensed under the MIT License.
+
+
