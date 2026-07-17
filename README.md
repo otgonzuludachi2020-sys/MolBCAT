@@ -71,7 +71,6 @@ pip install -r requirements.txt
 ## Pretrained Weights
 
 Download weights from Google Drive and place them in the `weights/` folder:
-```
 
 ```
 weights/
