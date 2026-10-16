@@ -16,10 +16,11 @@ data:
       col: NR-AR
 
 split:
-  test_ratio: 0.20
-  val_ratio: 0.10
-  phase1_seed: 42
-  phase2_seeds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    n_folds: 5
+    inner_val_ratio: 0.10
+    split_type: scaffold
+    inner_split_type: scaffold
+    random_seed: 42
 
 model:
   emb_dim: 256
@@ -32,13 +33,13 @@ model:
 training:
   batch_size: 32
   early_stop: 8
-  epochs: 20           # GRU / GIN epochs
+  epochs: 30           # GRU / GIN epochs
   chemberta_epochs: 30  # ChemBERTa
   molbcat_epochs: 30   # MolBCAT cross-attention epochs
 
 # Data efficiency uses different early_stop and epochs
 data_efficiency:
-  early_stop: 5
+  early_stop:  8
   epochs: 30
 
 # Hyperparameter search grids
@@ -111,10 +112,6 @@ models:
 weights:
   pretrained_encoder: weights/pretrained_encoder_epoch10.pt
   vocab: weights/vocab.json
-  save_dir:
-    gru_gin: weights/GRU_GIN
-    molbcat: weights/MolBCAT
-    chemberta: weights/ChemBERTa
 
 output:
   save_dir: ./outputs/classification

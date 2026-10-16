@@ -13,27 +13,37 @@ from src.models import ChemBERTaModel
 from src.evaluation import safe_auc, calc_cls_metrics, calc_reg_metrics
 
 
+def _validation_metric(y_true, y_pred, task: str) -> float:
+    
+    if task == "cls":
+        return safe_auc(y_true, y_pred)
+
+    if task == "reg":
+        return calc_reg_metrics(y_true, y_pred)["RMSE"]
+
+    raise ValueError(f"Unsupported task: {task}")
+
+
+def _is_improved(current: float, best: float, task: str,
+                 min_delta: float = 1e-4) -> bool:
+
+    if np.isnan(current):
+        return False
+
+    if task == "cls":
+        return current > best + min_delta
+
+    if task == "reg":
+        return current < best - min_delta
+
+    raise ValueError(f"Unsupported task: {task}")
+
+
 def train_gru(model, train_loader, val_loader,
               pos_weight=None, lr: float = 1e-3,
               epochs: int = 20, early_stop: int = 8,
               task: str = 'cls', device: str = 'cpu') -> tuple:
-    """
-    Train a GRU or GIN model.
-
-    Args:
-        model:        GRUModel or GINModel instance.
-        train_loader: Training DataLoader.
-        val_loader:   Validation DataLoader.
-        pos_weight:   Class weight tensor for imbalanced classification.
-        lr:           Learning rate.
-        epochs:       Maximum number of epochs.
-        early_stop:   Patience for early stopping.
-        task:         'cls' for classification, 'reg' for regression.
-        device:       'cuda' or 'cpu'.
-
-    Returns:
-        (model, best_val_metric)
-    """
+    
     opt     = torch.optim.Adam(
         filter(lambda p: p.requires_grad, model.parameters()), lr=lr
     )
@@ -79,14 +89,10 @@ def train_gru(model, train_loader, val_loader,
                                  if task == 'cls' else out.cpu().numpy())
                     trues.extend(yb.cpu().numpy())
 
-        if task == 'cls':
-            metric   = safe_auc(trues, preds)
-            if np.isnan(metric):
-                continue
-            improved = metric > best_metric + 1e-4
-        else:
-            metric = calc_reg_metrics(trues, preds)['RMSE']
-            improved = metric < best_metric - 1e-4
+        metric = _validation_metric(trues, preds, task)
+        if np.isnan(metric):
+            continue
+        improved = _is_improved(metric, best_metric, task)
 
         if improved:
             best_metric = metric
@@ -110,13 +116,7 @@ def train_molbcat(model, train_loader, val_loader,
                   early_stop: int = 8,
                   task: str = 'cls',
                   device: str = 'cpu') -> tuple:
-    """
-    Train MolBCAT with separate learning rates for encoder and head.
-    Freezes the GRU encoder for the first 3 epochs, then unfreezes.
-
-    Returns:
-        (model, best_val_metric, train_curve, val_curve)
-    """
+   
     encoder_params = (
         list(model.gru_encoder.parameters()) +
         list(model.gin_encoder.parameters()) +
@@ -144,9 +144,10 @@ def train_molbcat(model, train_loader, val_loader,
     best_state   = copy.deepcopy(model.state_dict())
     patience     = 0
     train_curve, val_curve = [], []
+    train_r2_curve, val_r2_curve = [], []
 
     for epoch in range(epochs):
-        # Freeze GRU encoder for the first 3 epochs (epoch 0, 1, 2), then unfreeze
+   
         req_grad = epoch >= 3
         for p in model.gru_encoder.parameters():
             p.requires_grad = req_grad
@@ -176,21 +177,24 @@ def train_molbcat(model, train_loader, val_loader,
         tr_p, tr_t = _infer(train_loader)
         vl_p, vl_t = _infer(val_loader)
 
-        if task == 'cls':
-            if len(set(vl_t)) < 2:
-                continue
-            tr_m = safe_auc(tr_t, tr_p)
-            vl_m = safe_auc(vl_t, vl_p)
-            if np.isnan(vl_m):
-                continue
-            improved = vl_m > best_metric + 1e-4
-        else:
-            tr_m = calc_reg_metrics(tr_t, tr_p)['RMSE'] 
-            vl_m = calc_reg_metrics(vl_t, vl_p)['RMSE'] 
-            improved = vl_m < best_metric - 1e-4
+        if task == 'cls' and len(set(vl_t)) < 2:
+            continue
+
+        tr_m = _validation_metric(tr_t, tr_p, task)
+        vl_m = _validation_metric(vl_t, vl_p, task)
+
+        if np.isnan(vl_m):
+            continue
+
+        improved = _is_improved(vl_m, best_metric, task)
 
         train_curve.append(tr_m)
         val_curve.append(vl_m)
+
+        if task == 'reg':
+            train_r2_curve.append(calc_reg_metrics(tr_t, tr_p)['R2'])
+            val_r2_curve.append(calc_reg_metrics(vl_t, vl_p)['R2'])
+
         print(f"  Epoch {epoch + 1} | train={tr_m:.4f} | val={vl_m:.4f}")
 
         if improved:
@@ -204,6 +208,11 @@ def train_molbcat(model, train_loader, val_loader,
                 break
 
     model.load_state_dict(best_state)
+
+    if task == 'reg':
+        return (model, best_metric, train_curve, val_curve,
+                train_r2_curve, val_r2_curve)
+
     return model, best_metric, train_curve, val_curve
 
 def train_chemberta(
@@ -218,14 +227,7 @@ def train_chemberta(
     task: str = 'cls',
     device: str = 'cpu'
 ) -> tuple:
-    """
-    Fine-tune ChemBERTa with separate learning rates for the pretrained
-    encoder and the classification/regression head. Batches are dicts
-    with 'input_ids', 'attention_mask', 'label' (see ChemBERTaSMILESDataset).
-
-    Returns:
-        (model, best_val_metric, train_curve, val_curve)
-    """
+  
     opt = torch.optim.AdamW([
         {'params': model.encoder.parameters(), 'lr': lr_encoder},
         {'params': model.head.parameters(),    'lr': lr_head},
@@ -272,18 +274,16 @@ def train_chemberta(
         tr_p, tr_t = _infer(train_loader)
         vl_p, vl_t = _infer(val_loader)
 
-        if task == 'cls':
-            if len(set(vl_t)) < 2:
-                continue
-            tr_m = safe_auc(tr_t, tr_p)
-            vl_m = safe_auc(vl_t, vl_p)
-            if np.isnan(vl_m):
-                continue
-            improved = vl_m > best_metric + 1e-4
-        else:
-            tr_m = calc_reg_metrics(tr_t, tr_p)['RMSE']
-            vl_m = calc_reg_metrics(vl_t, vl_p)['RMSE']
-            improved = vl_m < best_metric - 1e-4
+        if task == 'cls' and len(set(vl_t)) < 2:
+            continue
+
+        tr_m = _validation_metric(tr_t, tr_p, task)
+        vl_m = _validation_metric(vl_t, vl_p, task)
+
+        if np.isnan(vl_m):
+            continue
+
+        improved = _is_improved(vl_m, best_metric, task)
 
         train_curve.append(tr_m)
         val_curve.append(vl_m)
@@ -307,7 +307,7 @@ def infer_gru(model, X_tensor: torch.Tensor,
               task: str = 'cls',
               batch_size: int = 256,
               device: str = 'cpu') -> np.ndarray:
-    """Run batch inference for GRU model."""
+
     model.eval()
     preds = []
     with torch.no_grad():
@@ -322,7 +322,7 @@ def infer_gin(model, graph_list: list,
               task: str = 'cls',
               batch_size: int = 32,
               device: str = 'cpu') -> tuple:
-    """Run batch inference for GIN model."""
+  
     model.eval()
     preds, labels = [], []
     with torch.no_grad():
@@ -338,7 +338,7 @@ def infer_gin(model, graph_list: list,
 def infer_molbcat(model, loader,
                   task: str = 'cls',
                   device: str = 'cpu') -> tuple:
-    """Run batch inference for MolBCAT model."""
+   
     model.eval()
     preds, labels = [], []
     with torch.no_grad():
@@ -353,10 +353,7 @@ def infer_molbcat(model, loader,
 def infer_chemberta(model, loader,
                     task: str = 'cls',
                     device: str = 'cpu') -> tuple:
-    """
-    Run batch inference for ChemBERTa model. Batches are dicts with
-    'input_ids', 'attention_mask', 'label' (see ChemBERTaSMILESDataset).
-    """
+    
     model.eval()
     preds, labels = [], []
     with torch.no_grad():

@@ -10,14 +10,7 @@ from .gin import GINEncoder
 
 
 class MolBCAT(nn.Module):
-    """
-    MolBCAT: Self-supervised GRU pretraining with bidirectional
-    cross-modal attention for molecular property prediction.
-
-    Works for both classification and regression tasks.
-    The task is determined by the loss function used during training.
-    """
-
+    
     def __init__(self,
                  vocab_size:    int,
                  emb_dim:       int = 256,
@@ -59,16 +52,7 @@ class MolBCAT(nn.Module):
 
     def _encode(self, smiles_x: torch.Tensor,
                 graph_data) -> torch.Tensor:
-        """
-        Core encoding logic shared by forward() and get_embedding().
-
-        Args:
-            smiles_x:   Token IDs, shape (B, L)
-            graph_data: PyG Batch object
-
-        Returns:
-            Fused representation h_out, shape (B, hidden_dim)
-        """
+    
         device = smiles_x.device
 
         # --- Sequence branch ---
@@ -102,8 +86,6 @@ class MolBCAT(nn.Module):
             H_atom_pad[i, :n]    = atoms_i
             key_pad_mask[i, :n]  = False
 
-        # --- Bidirectional cross-modal attention ---
-        # Sequence attends to graph
         h_sg, _ = self.attn_sg(
             h_seq, H_atom_pad, H_atom_pad,
             key_padding_mask=key_pad_mask
@@ -128,23 +110,10 @@ class MolBCAT(nn.Module):
 
     def forward(self, smiles_x: torch.Tensor,
                 graph_data) -> torch.Tensor:
-        """
-        Args:
-            smiles_x:   Token IDs, shape (B, L)
-            graph_data: PyG Batch object
-
-        Returns:
-            Logits / predictions, shape (B, 1)
-        """
+       
         return self.head(self._encode(smiles_x, graph_data))
 
     def get_embedding(self, smiles_x: torch.Tensor,
                       graph_data) -> torch.Tensor:
-        """
-        Return the fused representation before the prediction head.
-        Useful for downstream tasks or visualization.
-
-        Returns:
-            Embeddings, shape (B, hidden_dim)
-        """
+      
         return self._encode(smiles_x, graph_data)

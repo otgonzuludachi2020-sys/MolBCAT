@@ -15,7 +15,7 @@ Usage:
         --input molecules.csv \
         --output results.csv \
         --model MolBCAT \
-        --seed 1
+        --fold 1
 
 Available datasets:
     Classification: BBBP, HIV, ClinTox, Tox21_NR_AR
@@ -34,11 +34,9 @@ from src.utils import get_device, load_vocab, load_json
 from src.models import GRUModel, GINModel, MolBCAT, ChemBERTaModel
 
 
-# Checkpoint path templates matching the weights/ folder structure
+
 CLS_DATASETS = {'BBBP', 'HIV', 'ClinTox', 'Tox21_NR_AR'}
 REG_DATASETS = {'ESOL', 'Lipophilicity'}
-
-GRU_GIN_MODELS = {'GRU_Random', 'GRU_Frozen', 'GRU_Finetune', 'GIN'}
 
 CHEMBERTA_MAX_LEN    = 128
 
@@ -54,8 +52,8 @@ def parse_args():
                         choices=['MolBCAT', 'GRU_Finetune', 'GRU_Frozen',
                                  'GRU_Random', 'GIN', 'ChemBERTa'],
                         help='Which model to use (default: MolBCAT)')
-    parser.add_argument('--seed',        type=int, default=1,
-                        help='Which seed checkpoint to load (1-10, default: 1)')
+    parser.add_argument('--fold',        type=int, default=1, choices=range(1, 6),
+                        help='Which saved MolBCAT regression fold checkpoint to load (1-5; default: 1)')
     parser.add_argument('--smiles',      type=str, default=None,
                         help='Single SMILES string to predict')
     parser.add_argument('--input',       type=str, default=None,
@@ -66,37 +64,38 @@ def parse_args():
 
 
 def _get_ckpt_path(weights_dir: str, model_name: str,
-                   dataset: str, seed: int) -> str:
-    """Resolve checkpoint path from the weights/ folder structure."""
-    if dataset in REG_DATASETS:
-        ckpt_name = 'MolBCAT_Reg.pt' if model_name == 'MolBCAT' else f'{model_name}.pt'
-        return os.path.join(weights_dir, 'Regression',
-                            dataset, f'seed{seed}', ckpt_name)
-    if model_name == 'MolBCAT':
-        return os.path.join(weights_dir, 'MolBCAT',
-                            dataset, f'seed{seed}', 'MolBCAT.pt')
-    if model_name == 'ChemBERTa':
-        return os.path.join(weights_dir, 'ChemBERTa',
-                            dataset, f'seed{seed}', 'ChemBERTa.pt')
-    return os.path.join(weights_dir, 'GRU_GIN',
-                        dataset, f'seed{seed}', f'{model_name}.pt')
+                   dataset: str, fold: int) -> str:
+    """Resolve a checkpoint that is actually included in the released weights.
+
+    Only fold-level MolBCAT checkpoints for ESOL and Lipophilicity are currently
+    distributed. Other model/dataset checkpoints must not be implied to exist.
+    """
+    if dataset in REG_DATASETS and model_name == 'MolBCAT':
+        return os.path.join(weights_dir, dataset, f'fold_{fold}_MolBCAT.pt')
+
+    raise FileNotFoundError(
+        f"No released checkpoint is available for model={model_name!r}, "
+        f"dataset={dataset!r}. Currently available prediction checkpoints are "
+        "MolBCAT fold 1-5 for ESOL and Lipophilicity."
+    )
 
 
 def load_model(args, vocab: dict, device: str):
     """Load the appropriate model and checkpoint."""
-    ckpt_path = _get_ckpt_path(args.weights_dir, args.model, args.dataset, args.seed)
+    try:
+        ckpt_path = _get_ckpt_path(
+            args.weights_dir, args.model, args.dataset, args.fold
+        )
+    except FileNotFoundError as exc:
+        print(f"\nERROR: {exc}")
+        print("See README.md for details.")
+        sys.exit(1)
 
-    if not os.path.exists(ckpt_path):
-        print(f"\nERROR: Checkpoint not found:\n  {ckpt_path}")
-        print("\nExpected weights/ folder structure:")
-        print("  weights/")
-        print("  ├── vocab.json")
-        print("  ├── pretrained_encoder_epoch10.pt")
-        print("  ├── GRU_GIN/{dataset}/seed{N}/{model}.pt")
-        print("  ├── MolBCAT/{dataset}/seed{N}/MolBCAT.pt")
-        print("  ├── ChemBERTa/{dataset}/seed{N}/ChemBERTa.pt")
-        print("  └── Regression/{dataset}/seed{N}/{model}.pt")
-        print("\nDownload from Google Drive — see README.md")
+    if not os.path.isfile(ckpt_path):
+        print(f"\nERROR: Checkpoint file not found:\n  {ckpt_path}")
+        print("Available checkpoint folders:")
+        print("  weights/ESOL/fold_1_MolBCAT.pt ... fold_5_MolBCAT.pt")
+        print("  weights/Lipophilicity/fold_1_MolBCAT.pt ... fold_5_MolBCAT.pt")
         sys.exit(1)
 
     vocab_size = len(vocab)
@@ -113,10 +112,21 @@ def load_model(args, vocab: dict, device: str):
         hidden_dim = ckpt['fc.weight'].shape[1]
         model = GRUModel(vocab_size, hidden_dim=hidden_dim)
 
-    model.load_state_dict(torch.load(ckpt_path, map_location=device, weights_only=True))
+    checkpoint = torch.load(ckpt_path, map_location=device, weights_only=True)
+
+    
+    if (args.model == 'MolBCAT' and args.dataset in REG_DATASETS
+            and isinstance(checkpoint, dict)
+            and 'model_state_dict' in checkpoint):
+        state_dict = checkpoint['model_state_dict']
+    else:
+        state_dict = checkpoint
+
+    model.load_state_dict(state_dict)
     model = model.to(device)
     model.eval()
-    print(f"Loaded : {args.model} | {args.dataset} | seed{args.seed}")
+    print(f"Loaded : {args.model} | {args.dataset} | fold {args.fold}")
+    print(f"Checkpoint: {ckpt_path}")
     print(f"Device : {device}")
     return model
 

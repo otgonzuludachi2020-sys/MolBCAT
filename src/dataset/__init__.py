@@ -1,4 +1,18 @@
-from .split import scaffold_split, scaffold_train_val_test_split
+from .split import (
+    scaffold_kfold_split,
+    scaffold_train_val_split,
+    check_scaffold_disjoint,
+)
+
+
+from .split import (
+    scaffold_kfold_split,
+    scaffold_kfold_split_regression,
+    scaffold_train_val_split,
+    scaffold_train_val_split_regression,
+    check_scaffold_disjoint,
+)
+
 from .smiles import (
     filter_valid,
     encode_smiles,
