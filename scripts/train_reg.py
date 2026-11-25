@@ -1293,6 +1293,71 @@ def summarize(
 
     return summary
 
+
+def holm_adjust(p_values):
+    p_values = np.asarray(p_values, dtype=float)
+    adjusted = np.full(p_values.shape, np.nan, dtype=float)
+    valid_idx = np.flatnonzero(np.isfinite(p_values))
+    if len(valid_idx) == 0:
+        return adjusted
+
+    valid_p = p_values[valid_idx]
+    order = np.argsort(valid_p)
+    sorted_p = valid_p[order]
+    m = len(sorted_p)
+
+    sorted_adjusted = np.maximum.accumulate(
+        (m - np.arange(m)) * sorted_p
+    )
+    sorted_adjusted = np.minimum(sorted_adjusted, 1.0)
+
+    restored = np.empty(m, dtype=float)
+    restored[order] = sorted_adjusted
+    adjusted[valid_idx] = restored
+    return adjusted
+
+
+def apply_regression_holm_correction(all_summaries, output_dir):
+    p_columns = [
+        "p_MolBCAT_vs_ChemBERTa_RMSE",
+        "p_MolBCAT_vs_ChemBERTa_MAE",
+        "p_MolBCAT_vs_ChemBERTa_R2",
+    ]
+    refs, raw_p_values = [], []
+
+    target_datasets = {"ESOL", "Lipophilicity"}
+    for summary in all_summaries:
+        if summary.get("Dataset") not in target_datasets:
+            continue
+        for p_col in p_columns:
+            p_value = summary.get(p_col, np.nan)
+            if p_value is not None and np.isfinite(p_value):
+                refs.append((summary, p_col))
+                raw_p_values.append(float(p_value))
+
+    if len(raw_p_values) != 6:
+        raise RuntimeError(
+            "Expected six valid regression p-values for the prespecified "
+            "Holm family (ESOL/Lipophilicity × RMSE/MAE/R2), but found "
+            f"{len(raw_p_values)}. Check completed folds and saved results."
+        )
+
+    adjusted_values = holm_adjust(raw_p_values)
+    for (summary, p_col), adjusted_p in zip(refs, adjusted_values):
+        metric = p_col.replace("p_MolBCAT_vs_ChemBERTa_", "")
+        summary[f"p_holm_MolBCAT_vs_ChemBERTa_{metric}"] = float(adjusted_p)
+
+    # Update each dataset's archived JSON summary with adjusted p-values.
+    for summary in all_summaries:
+        dataset_name = summary.get("Dataset")
+        if dataset_name:
+            result_dir = os.path.join(output_dir, "five_fold", dataset_name)
+            os.makedirs(result_dir, exist_ok=True)
+            save_json(os.path.join(result_dir, "summary.json"), summary)
+
+    return all_summaries
+
+
 def main(args=None):
     if args is None: 
         args = parse_args()
@@ -1316,7 +1381,6 @@ def main(args=None):
     )
 
     
-
     if args.dataset == "all":
 
         datasets = cfg["data"]["datasets"]
@@ -1538,6 +1602,10 @@ def main(args=None):
             summary
         )
 
+    all_summaries = apply_regression_holm_correction(
+        all_summaries,
+        cfg["output"]["save_dir"],
+    )
 
     df = pd.DataFrame(
         all_summaries

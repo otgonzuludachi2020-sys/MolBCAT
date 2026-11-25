@@ -1,5 +1,5 @@
-"""
-MolBCAT — Primary CLI Entry Point
+﻿"""
+MolBCAT ??Primary CLI Entry Point
 ===================================
 
 Usage:
@@ -28,6 +28,12 @@ Usage:
   # Step 3: Ablation study
   python main.py train_ablation
 
+  # Step 4: Data-efficiency analysis
+  python main.py train_dataeff
+
+  # Resume an interrupted data-efficiency analysis
+  python main.py train_dataeff --resume
+
   # Predict on new molecules
   python main.py predict --dataset BBBP \
       --smiles "CC(=O)Oc1ccccc1C(=O)O"
@@ -46,7 +52,7 @@ def main():
     parser = argparse.ArgumentParser(
         prog="molbcat",
         description=(
-            "MolBCAT — Bidirectional Cross-Modal Attention "
+            "MolBCAT ??Bidirectional Cross-Modal Attention "
             "for Molecular Property Prediction"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -95,7 +101,7 @@ def main():
         help="Resume from completed fold checkpoints",
     )
 
-    
+
 
     p_reg = subparsers.add_parser(
         "train_reg",
@@ -123,6 +129,39 @@ def main():
 
 
 
+    p_de = subparsers.add_parser(
+        "train_dataeff",
+        help="Run 5-fold scaffold-based data-efficiency analysis",
+    )
+
+    p_de.add_argument(
+        "--cls_config",
+        type=str,
+        default="configs/classification.yaml",
+        help="Classification YAML configuration",
+    )
+
+    p_de.add_argument(
+        "--reg_config",
+        type=str,
+        default="configs/regression.yaml",
+        help="Regression YAML configuration",
+    )
+
+    p_de.add_argument(
+        "--out_dir",
+        type=str,
+        default="outputs/data_efficiency_scaffold5fold",
+        help="Directory for fold-level and summary outputs",
+    )
+
+    p_de.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume completed fold/fraction combinations",
+    )
+
+
     p_ab = subparsers.add_parser(
         "train_ablation",
         help="Run concatenation ablation study",
@@ -146,7 +185,7 @@ def main():
         default="./outputs/ablation",
     )
 
-   
+
 
     p_pr = subparsers.add_parser(
         "predict",
@@ -237,7 +276,13 @@ def main():
 
         run(args)
 
-    
+
+    elif args.command == "train_dataeff":
+
+        from scripts.data_eff import main as run
+
+        run(args)
+
     elif args.command == "train_ablation":
 
         from scripts.train_ablation import main as run

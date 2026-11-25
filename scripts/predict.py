@@ -1,25 +1,39 @@
 """
-Inference script — predict molecular properties using pretrained weights.
+Inference script — predict molecular properties using available
+pretrained MolBCAT regression checkpoints.
 
 Usage:
-    # Single SMILES
+    # Single SMILES: ESOL
     python scripts/predict.py \
         --weights_dir weights \
-        --dataset BBBP \
-        --smiles "CC(=O)Oc1ccccc1C(=O)O"
+        --dataset ESOL \
+        --model MolBCAT \
+        --fold 1 \
+        --smiles "CCO"
 
-    # CSV file (must have a 'smiles' column)
+    # Single SMILES: Lipophilicity
     python scripts/predict.py \
         --weights_dir weights \
-        --dataset BBBP \
+        --dataset Lipophilicity \
+        --model MolBCAT \
+        --fold 1 \
+        --smiles "CCO"
+
+    # CSV input: ESOL
+    python scripts/predict.py \
+        --weights_dir weights \
+        --dataset ESOL \
         --input molecules.csv \
-        --output results.csv \
+        --output results_esol.csv \
         --model MolBCAT \
         --fold 1
 
-Available datasets:
-    Classification: BBBP, HIV, ClinTox, Tox21_NR_AR
-    Regression:     ESOL, Lipophilicity
+Available pretrained MolBCAT regression checkpoints:
+    ESOL
+    Lipophilicity
+
+Five fold-level checkpoints are available for each dataset.
+Classification prediction is not covered by these examples.
 """
 import os
 import sys

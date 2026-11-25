@@ -64,6 +64,7 @@ molbcat/
 │   ├── train_cls.py                # Classification experiments
 │   ├── train_reg.py                # Regression experiments
 │   ├── train_ablation.py           # Ablation experiments
+│   ├── data_eff.py                 # Data-efficiency analysis
 │   └── predict.py                  # Molecular property prediction
 │
 ├── checkpoints/                    # Saved experiment checkpoints
@@ -213,8 +214,36 @@ python main.py train_reg --resume
 
 ---
 
+## Step 4: Data-Efficiency Analysis
 
-## Step 4: Ablation Experiments
+Run the complete data-efficiency analysis:
+
+```bash
+python main.py train_dataeff
+```
+
+Resume an interrupted analysis:
+
+```bash
+python main.py train_dataeff --resume
+```
+
+The default configuration files are `configs/classification.yaml` and
+`configs/regression.yaml`. Results are written to
+`outputs/data_efficiency_scaffold5fold/` by default.
+
+You can override the configuration files and output directory:
+
+```bash
+python main.py train_dataeff \\
+    --cls_config configs/classification.yaml \\
+    --reg_config configs/regression.yaml \\
+    --out_dir outputs/data_efficiency_scaffold5fold
+```
+
+---
+
+## Step 5: Ablation Experiments
 
 ```bash
 python main.py train_ablation
@@ -224,21 +253,17 @@ python main.py train_ablation
 
 ## Prediction
 
-Prediction is currently supported for the released MolBCAT
-regression checkpoints for ESOL and Lipophilicity.
-
 ### Single SMILES
-
-Predict the ESOL property:
-
+Predict a molecular property from a single SMILES string using the ESOL model:
 ```bash
-python scripts/predict.py \
+python main.py predict \
     --dataset ESOL \
     --model MolBCAT \
     --fold 1 \
     --smiles "CCO"
+```
 
-Predict the Lipophilicity property:
+For Lipophilicity prediction:
 
 python scripts/predict.py \
     --dataset Lipophilicity \
@@ -247,8 +272,20 @@ python scripts/predict.py \
     --smiles "CCO"
 
 
-CSV Input
-Prepare a CSV file named molecules.csv with a smiles column:
+### CSV input
+For Lipophilicity prediction:
+```bash
+python main.py predict \
+    --dataset ESOL \
+    --input molecules.csv \
+    --output results.csv \
+    --model MolBCAT \
+    --seed 1
+```
+
+Prepare a CSV file named molecules.csv containing a column named smiles.
+
+Example:
 
 smiles
 CCO
@@ -264,7 +301,7 @@ python scripts/predict.py \
     --model MolBCAT \
     --fold 1
 
-Run prediction on Lipophilicity:
+For Lipophilicity prediction:
 
 python scripts/predict.py \
     --dataset Lipophilicity \
@@ -371,6 +408,25 @@ validation set.
 
 ---
 
+# Data-Efficiency Analysis
+
+The data-efficiency analysis evaluates `GRU_Random`, `GRU_Finetune`, and
+`MolBCAT` using 10%, 20%, 40%, 60%, 80%, and 100% of the inner training
+pool. The analysis uses five outer scaffold-based folds.
+
+For each outer fold, the inner scaffold-disjoint validation partition and
+the untouched outer test fold remain fixed across the training-data
+fractions. Hyperparameter selection is performed separately for each
+fold and data fraction using the corresponding training subset and
+validation partition. The outer test fold is used only for final
+evaluation.
+
+Results are summarized as mean ± standard deviation across the five
+outer folds. These fold-level results should be interpreted with the
+limitations of five-fold cross-validation in mind.
+
+---
+
 # Regression
 
 Regression experiments use the same **5-fold scaffold-aware outer
@@ -427,6 +483,7 @@ The revised evaluation protocol uses:
 - Untouched outer test folds
 - Incremental result/checkpoint saving
 - Resume support for interrupted experiments
+- Data-efficiency evaluation across six training-data fractions with fold-specific model selection
 
 Random seeds are controlled through the utility functions in
 `src/utils.py`.
@@ -466,8 +523,9 @@ will skip completed folds and continue the remaining experiment.
 
 # Data Splitting
 
-All final classification and regression experiments use
-**scaffold-aware splitting** based on Bemis–Murcko scaffolds.
+All final classification and regression experiments, as well as the
+data-efficiency analysis, use **scaffold-aware splitting** based on
+Bemis–Murcko scaffolds.
 
 The outer test fold is scaffold-disjoint from the development data.
 
